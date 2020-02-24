@@ -1,27 +1,32 @@
 // If you would like to see what everything does, click the book icon in the 
 // jGRASP toolbar.
-package tank;
+
 
 import javafx.application.Application;
 import javafx.scene.*;
+import javafx.scene.effect.*;
 import javafx.stage.*;
 import javafx.scene.paint.Color;
 import javafx.animation.*;
 import javafx.event.*;
 import javafx.scene.input.*;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.util.Duration;
 import javafx.scene.shape.*;
 import javafx.geometry.Point2D;
 import javafx.geometry.Bounds;
+import javafx.geometry.BoundingBox;
 import javafx.scene.image.*;
+import java.util.*;
+import java.io.*;
 
 /*
-  TODO: documentation for bullet class
+  TODO: 
         tweak tank collision with walls
         MAKE IT FEEL LIKE A TANK
         FIX CORNER GLITCH
         actually start the real .java for the game
-        class constant for limit of bullets
         
   REMINDERS FOR DREW: don't use generate csd
                       don't press tabs -> spaces
@@ -34,6 +39,8 @@ import javafx.scene.image.*;
  * 
  * @author         Drew Harris
  *
+ * @version 1.3.0  2/24/2020  Added balls disapearing
+ * 
  * @version 1.2.1  2/22/2020  Added new map and fixed indentation / 
  *                            matched google style guide -indentation
  *
@@ -51,6 +58,9 @@ public class TanksMovement extends Application {
     PixelReader reader;
     Tank player;
 
+    public static final int BULLET_LIMIT = 200;
+    public static final int BULLET_SPEED = 4;
+    public static final int SHOOT_VARIATION = 0;
     public static final int UP = 0;
     public static final int DOWN = 1;
     public static final int LEFT = 2;
@@ -74,7 +84,6 @@ public class TanksMovement extends Application {
                 if (e.getCode() == KeyCode.END) {
                     player.shoot();
                 }
-
             }
 
             if (e.getEventType() == KeyEvent.KEY_RELEASED) {
@@ -112,16 +121,30 @@ public class TanksMovement extends Application {
                 player.go(false);
             }
 
-           
+
             player.setPosition();
 
             for (Bullet bullet : myBullets) {
                 if (bullet.enabled) {
-                bullet.moveBullet();
-                bullet.doReflect();
+                    bullet.moveBullet();
+                    bullet.doReflect();
                 }
             }
         }
+    }
+    
+   /** Returns the first bullet in the array that is not active.
+    * TODO: make the array a parameter
+    * @return the first index of a bullet that is not being used.
+    */
+    public int getFirstBullet() {
+        for (int i = 0; i < myBullets.length; i++) {
+            if (!myBullets[i].enabled) {
+                return i;
+            }
+       }
+
+       return -1;
     }
 
     public static void main(String[] args) {
@@ -130,7 +153,7 @@ public class TanksMovement extends Application {
 
 
     public void start(Stage stage) {
-    	
+
         Group root = new Group();
         Scene scene = new Scene(root, 1280, 720, Color.WHITE);
 
@@ -142,15 +165,15 @@ public class TanksMovement extends Application {
         reader = map.getPixelReader();
 
         //signature rectangle 
-        Rectangle rKey = new Rectangle(0,0,5,5);
+    Rectangle rKey = new Rectangle(0,0,5,5);
         rKey.setFill(Color.RED);
         KeyBoard kb = new KeyBoard();
         root.getChildren().add(rKey);
         rKey.addEventHandler(KeyEvent.ANY, kb);
         rKey.requestFocus();
 
-        myBullets = new Bullet[300];
-        for(int i = 0; i < 300; i++) {
+        myBullets = new Bullet[BULLET_LIMIT];
+        for(int i = 0; i < myBullets.length; i++) {
            myBullets[i] = new Bullet(root);
            myBullets[i].setStatus(false);
         }
@@ -164,7 +187,11 @@ public class TanksMovement extends Application {
 
         TanksAnimationTimer aniTimer = new TanksAnimationTimer();
         aniTimer.start();
-   }
+    }
+   
+    
+   
+   
 
    //-------------------------------------------------------------------------------------------
 
@@ -199,40 +226,29 @@ public class TanksMovement extends Application {
 
             dispTank.setRotate(angle * -1 - 90);    // initally sets tank to face RIGHT
         }
+        
+        
 
-        /** Returns the first bullet in the array that is not active.
-         * TODO: make the array a parameter
-         * @return the first index of a bullet that is not being used.
-         */
-        public int getFirstBullet() {
-            for (int i = 0; i < myBullets.length; i++) {
-                if (!myBullets[i].enabled) {
-                    return i;
-                }
-            }
+        
 
-            return -1;
-        }
-
-        /** Called whenever user presses END key.
-         * TODO: rebuff angle variation system
-         */
+        /** Called whenever user presses END key.*/
         public void shoot() {
             int index = getFirstBullet();
-
-            myBullets[index].setStatus(true);
-            myBullets[index].setX(getMiddlePoint().getX());
-            myBullets[index].setY(getMiddlePoint().getY());
-
-            double angleVariation = (Math.random() * ( 3 ));
-            if (Math.random() > .5) {
-                angleVariation *= -1;
+            if(index != -1) {
+                myBullets[index].setStatus(true);
+                
+                myBullets[index].setX(getMiddlePoint().getX() + 27.5 * Math.cos( Math.toRadians( angle)));
+                myBullets[index].setY(getMiddlePoint().getY() + 27.5 * -1 *Math.sin( Math.toRadians( angle)));
+                
+                double angleVariation = (Math.random() * ( SHOOT_VARIATION ));
+                if (Math.random() > .5) {
+                    angleVariation *= -1;
+                }
+    
+                // sets the speed of the bullet using trig and raw bullet speed
+                myBullets[index].setSpeed( (Math.cos( Math.toRadians( angle + angleVariation)) * BULLET_SPEED),
+                                           (Math.sin( Math.toRadians( angle + angleVariation )) * - BULLET_SPEED) );
             }
-
-            // sets the speed of the bullet using trig and raw bullet speed
-            // TODO: change the '4' to be more accessable
-            myBullets[index].setSpeed( (Math.cos( Math.toRadians( angle + angleVariation)) * 4), (Math.sin( Math.toRadians( angle + angleVariation )) * -4) );
-
         }
 
         /** Gets the center point of the tank in terms of its bounds.
@@ -376,7 +392,9 @@ public class TanksMovement extends Application {
         double yPos;
         double xVel;
         double yVel;
-
+        
+        int collisionCount; 
+        
         boolean enabled;
 
         int radius; // TODO: make radius a class final constant
@@ -389,20 +407,37 @@ public class TanksMovement extends Application {
          * @param root THIS SHOULD ONLY EVER BE THE ROOT NODE
          */
         public Bullet(Group root) {
-           radius = 4;
-           displayCircle = new Circle(0, 0, radius);
-           displayCircle.setFill(Color.BLUE);
-           root.getChildren().add(displayCircle);
-
+            radius = 4;
+            displayCircle = new Circle(0, 0, radius);
+            displayCircle.setFill(Color.BLUE);
+            root.getChildren().add(displayCircle);
+            
         }
 
+        
+        
+        public void doEvaporate() {
+            FillTransition waitT = new	FillTransition(Duration.millis(300), displayCircle, Color.BLUE, Color.TRANSPARENT);
+            waitT.setOnFinished((new EventHandler<ActionEvent>() {
+    			public void	handle(ActionEvent e){
+                    collisionCount = 0;
+    				displayCircle.setFill(Color.TRANSPARENT);
+                    enabled = false;
+    			}
+    		})); 
+            waitT.play();
+        }
 
         /** Sets the status of the bullet.
          * @param state true if the bullet is relevant
          *
          */
         public void setStatus(boolean state) {
-           enabled = state;
+            enabled = state;
+            collisionCount = 0;
+            if (state) {
+                displayCircle.setFill(Color.BLUE);
+            }
         }
 
         /** Moves the bullet by adding velocities to class position integers than
@@ -410,12 +445,12 @@ public class TanksMovement extends Application {
          *
          */
         public void moveBullet() {
-            if (enabled) {
-                xPos += xVel;
-                yPos += yVel;
-                displayCircle.setTranslateX(xPos);
-                displayCircle.setTranslateY(yPos);
-            }
+            
+            xPos += xVel;
+            yPos += yVel;
+            displayCircle.setTranslateX(xPos);
+            displayCircle.setTranslateY(yPos);
+            
         }
         
         
@@ -454,6 +489,10 @@ public class TanksMovement extends Application {
                 } else if (inBlack(refY) && inBlack(refX)) {
                     yVel *= -1;
                     xVel *= -1;
+                }
+                collisionCount++;
+                if (collisionCount == 3) {
+                    doEvaporate();
                 }
             }
         }

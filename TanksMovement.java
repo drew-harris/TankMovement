@@ -1,5 +1,6 @@
 // If you would like to see what everything does, click the book icon in the 
 // jGRASP toolbar.
+// This is the fun version.
 
 import javafx.application.Application;
 import javafx.scene.*;

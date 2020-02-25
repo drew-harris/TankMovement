@@ -1,7 +1,6 @@
 // If you would like to see what everything does, click the book icon in the 
 // jGRASP toolbar.
 
-
 import javafx.application.Application;
 import javafx.scene.*;
 import javafx.scene.effect.*;
@@ -23,21 +22,24 @@ import java.io.*;
 
 /*
   TODO: 
+        add more front collision detection for tank
         tweak tank collision with walls
         MAKE IT FEEL LIKE A TANK
-        FIX CORNER GLITCH
+        decide on how balls should disappear
         actually start the real .java for the game
+        PRIVATE VARIABLES
         
   REMINDERS FOR DREW: don't use generate csd
                       don't press tabs -> spaces
 */
 
 
-
 /** Movement test file for tank game.
  * Still using inner classes which should be removed for the final version<p>
  * 
  * @author         Drew Harris
+ *
+ * @version 1.3.1  2/24/2020  Fixed corner glitch + improved collision
  *
  * @version 1.3.0  2/24/2020  Added balls disapearing
  * 
@@ -58,9 +60,9 @@ public class TanksMovement extends Application {
     PixelReader reader;
     Tank player;
 
-    public static final int BULLET_LIMIT = 200;
+    public static final int BULLET_LIMIT = 20;
     public static final int BULLET_SPEED = 4;
-    public static final int SHOOT_VARIATION = 0;
+    
     public static final int UP = 0;
     public static final int DOWN = 1;
     public static final int LEFT = 2;
@@ -121,7 +123,6 @@ public class TanksMovement extends Application {
                 player.go(false);
             }
 
-
             player.setPosition();
 
             for (Bullet bullet : myBullets) {
@@ -165,7 +166,7 @@ public class TanksMovement extends Application {
         reader = map.getPixelReader();
 
         //signature rectangle 
-    Rectangle rKey = new Rectangle(0,0,5,5);
+        Rectangle rKey = new Rectangle(0,0,5,5);
         rKey.setFill(Color.RED);
         KeyBoard kb = new KeyBoard();
         root.getChildren().add(rKey);
@@ -188,10 +189,6 @@ public class TanksMovement extends Application {
         TanksAnimationTimer aniTimer = new TanksAnimationTimer();
         aniTimer.start();
     }
-   
-    
-   
-   
 
    //-------------------------------------------------------------------------------------------
 
@@ -199,6 +196,7 @@ public class TanksMovement extends Application {
     public class Tank {
 
         Rectangle dispTank;
+        Rectangle testBounds;
 
         double xPos;
         double yPos;
@@ -209,9 +207,11 @@ public class TanksMovement extends Application {
         double rawSpeed = 4;
         double angle;
 
-        int collision;  // direction for the tank's collision, uses class constants
+        boolean[] collisionList;  // direction for the tank's collision, uses class constants
                         // UP DOWN LEFT RIGHT
-
+        
+        boolean canShoot;
+        
         public Tank(Group root) {
             dispTank = new Rectangle(0, 0, 30, 55);
             dispTank.setFill(Color.BLUE);
@@ -219,35 +219,37 @@ public class TanksMovement extends Application {
             angle = 0;
             xVel = 0;
             yVel = 0;
-
+            canShoot = true;
             setX(640);  // starting x and
             setY(360);  // y positions
-
-
             dispTank.setRotate(angle * -1 - 90);    // initally sets tank to face RIGHT
+            
         }
         
-        
-
         
 
         /** Called whenever user presses END key.*/
         public void shoot() {
             int index = getFirstBullet();
-            if(index != -1) {
+            if (index != -1 && canShoot) {
+            
                 myBullets[index].setStatus(true);
-                
                 myBullets[index].setX(getMiddlePoint().getX() + 27.5 * Math.cos( Math.toRadians( angle)));
                 myBullets[index].setY(getMiddlePoint().getY() + 27.5 * -1 *Math.sin( Math.toRadians( angle)));
                 
-                double angleVariation = (Math.random() * ( SHOOT_VARIATION ));
-                if (Math.random() > .5) {
-                    angleVariation *= -1;
-                }
-    
-                // sets the speed of the bullet using trig and raw bullet speed
-                myBullets[index].setSpeed( (Math.cos( Math.toRadians( angle + angleVariation)) * BULLET_SPEED),
-                                           (Math.sin( Math.toRadians( angle + angleVariation )) * - BULLET_SPEED) );
+                myBullets[index].setSpeed( (Math.cos( Math.toRadians( angle)) * BULLET_SPEED),
+                                           (Math.sin( Math.toRadians( angle )) * - BULLET_SPEED) );
+                                           
+                canShoot = false;
+                
+                PauseTransition waitT = new PauseTransition(Duration.millis(200));
+                waitT.setOnFinished((new EventHandler<ActionEvent>() {
+    			    public void	handle(ActionEvent e){
+                        canShoot = true;
+    			    }
+    		    })); 
+                waitT.play();
+                
             }
         }
 
@@ -264,31 +266,41 @@ public class TanksMovement extends Application {
         * Will require access to Pixel reader in the future
         * @return The class constant for direction representing the direction of collision
         */
-        public int findCollision() {
+        public boolean[] findCollision() {
+            boolean[] collisionList = new boolean[6];   //up down left right front back
+        
             Bounds bound = dispTank.getBoundsInParent();
-
-
-            //right
-            if (reader.getColor( (int)bound.getMaxX(), (int)(bound.getMinY() + bound.getHeight()/2) ).equals(Color.BLACK)) {
-                return RIGHT;
+            
+            int cornerOffset = 30;
+            int scannerSteps = 2;
+            
+            // up && down
+            
+            if (reader.getColor( (int)(bound.getMinX() + bound.getWidth()/2), (int)bound.getMinY() ).equals(Color.BLACK)) {
+                 collisionList[UP] = true;
+            } else if (reader.getColor( (int)(bound.getMinX() + bound.getWidth()/2), (int)bound.getMaxY() ).equals(Color.BLACK)) {
+                collisionList[DOWN] = true;
             }
-
-            //left
+            
+            
+            // right && left
             if (reader.getColor( (int)bound.getMinX(), (int)(bound.getMinY() + bound.getHeight()/2) ).equals(Color.BLACK)) {
-                return LEFT;
+                collisionList[LEFT] = true;
+            } else if (reader.getColor( (int)bound.getMaxX(), (int)(bound.getMinY() + bound.getHeight()/2) ).equals(Color.BLACK)) {
+                collisionList[RIGHT] = true;
+            }
+            
+            // front & back
+            if (reader.getColor( (int)(getMiddlePoint().getX() + 27.5 *Math.cos( Math.toRadians( angle))) ,
+             (int) ((getMiddlePoint().getY() + 27.5 * -1 *Math.sin( Math.toRadians( angle))) ) ).equals(Color.BLACK)) {
+                collisionList[4] = true;
+            }else if (reader.getColor( (int)(getMiddlePoint().getX() - 27.5 * Math.cos( Math.toRadians( angle))) ,
+             (int) ((getMiddlePoint().getY() - 27.5 * -1 *Math.sin( Math.toRadians( angle))) ) ).equals(Color.BLACK)) {
+                collisionList[5] = true;
             }
 
-            //up
-            if (reader.getColor( (int)(bound.getMinX() + bound.getWidth()/2), (int)bound.getMinY() ).equals(Color.BLACK) ) {
-                return UP;
-            }
-
-            //down
-            if (reader.getColor( (int)(bound.getMinX() + bound.getWidth()/2), (int)bound.getMaxY() ).equals(Color.BLACK) ) {
-                return DOWN;
-            }
-
-            return 99;  // if no collision found
+            
+            return collisionList;
         }
 
         /** Updates the classes xPos and yPos but does not actually move image node.
@@ -297,28 +309,36 @@ public class TanksMovement extends Application {
          */
         public void go(boolean fwd) {
 
-            collision = findCollision();
+            collisionList = findCollision();
 
             if (fwd) {
-                xVel = Math.cos( Math.toRadians( angle ))* 4;
-                yVel = Math.sin( Math.toRadians( angle ))* -4;
+                xVel = Math.cos( Math.toRadians( angle ))* rawSpeed;
+                yVel = Math.sin( Math.toRadians( angle ))* -rawSpeed;
             } else {
-                xVel = Math.cos( Math.toRadians( angle ))* -2;
-                yVel = Math.sin( Math.toRadians( angle ))* 2;
+                xVel = Math.cos( Math.toRadians( angle ))* -rawSpeed;
+                yVel = Math.sin( Math.toRadians( angle ))* rawSpeed;
             }
-
-            if (collision == RIGHT && xVel > 0) {
-                yPos += yVel/2;
-            } else if (collision == LEFT && xVel < 0) {
-                yPos += yVel/2;
-            } else if (collision == UP && yVel < 0) {
-                xPos += xVel/2;
-            } else if (collision == DOWN && yVel > 0) {
-                xPos += xVel/2;
-            } else {
-                xPos += xVel;
-                yPos += yVel;
+            
+            if (collisionList[4] && fwd){
+                
+            } else if (collisionList[5] && !fwd){
+                
+            } else{
+            
+                if (!collisionList[UP] && yVel < 0){
+                    yPos += yVel;
+                }else if (!collisionList[DOWN] && yVel > 0){
+                    yPos += yVel;
+                }
+                
+                if (!collisionList[LEFT] && xVel < 0){
+                    xPos += xVel;
+                }else if (!collisionList[RIGHT] && xVel > 0){
+                    xPos += xVel;
+                }
+                
             }
+            
 
         }
 
@@ -327,17 +347,17 @@ public class TanksMovement extends Application {
          * @param angleBy How many degrees to change the angle of the tank by.
          */
         public void changeAngle(double angleBy) {
-            collision = findCollision();
+            collisionList = findCollision();
             double newAngle = angle + angleBy * 2;
 
             // TODO: make turning easier up against a wall
-            if (collision == UP || collision == DOWN) {
+            if (collisionList[UP] || collisionList[DOWN]) {
 
                 if (  (Math.sin( Math.toRadians(newAngle))) <= (Math.sin( Math.toRadians(angle))) ) {
                         angle += angleBy;
                 }
 
-            } else if (collision == LEFT || collision == RIGHT) {
+            } else if (collisionList[LEFT] || collisionList[RIGHT]) {
 
                 if (  (Math.cos( Math.toRadians(newAngle))) <= (Math.cos( Math.toRadians(angle))) ) {
                     angle += angleBy;
